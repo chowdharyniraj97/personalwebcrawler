@@ -1,0 +1,137 @@
+input|expected
+# Scheme and host case
+HTTP://EXAMPLE.COM/|http://example.com/
+HtTp://Example.Com/a|http://example.com/a
+HTTPS://Example.COM/a|https://example.com/a
+http://EXAMPLE.com/A/B|http://example.com/A/B
+http://sub.EXAMPLE.co.UK/x|http://sub.example.co.uk/x
+http://example.com/MixedCase?Q=V|http://example.com/MixedCase?Q=V
+https://WWW.Example.Org|https://www.example.org/
+http://example.com./a|http://example.com/a
+http://EXAMPLE.COM./|http://example.com/
+http://foo_bar.example.com/a|http://foo_bar.example.com/a
+# Ports
+http://example.com:80/a|http://example.com/a
+https://example.com:443/a|https://example.com/a
+http://example.com:443/a|http://example.com:443/a
+https://example.com:80/a|https://example.com:80/a
+http://example.com:8080/a|http://example.com:8080/a
+https://example.com:8443|https://example.com:8443/
+http://example.com:/a|http://example.com/a
+http://example.com:080/a|http://example.com/a
+http://example.com:65535/|http://example.com:65535/
+http://example.com:65536/|
+http://example.com:0/|
+http://example.com:abc/|
+# Fragments
+http://example.com/a#frag|http://example.com/a
+http://example.com/#top|http://example.com/
+http://example.com#top|http://example.com/
+http://example.com/a?x=1#frag|http://example.com/a?x=1
+http://example.com/a#|http://example.com/a
+http://example.com/a#/spa/route|http://example.com/a
+http://example.com/a#x?y=1|http://example.com/a
+HTTP://Example.COM:80/a#frag|http://example.com/a
+# Dot segments
+http://example.com/a/../b|http://example.com/b
+http://example.com/a/./b|http://example.com/a/b
+http://example.com/a/b/..|http://example.com/a/
+http://example.com/a/b/.|http://example.com/a/b/
+http://example.com/..|http://example.com/
+http://example.com/.|http://example.com/
+http://example.com/../a|http://example.com/a
+http://example.com/../../a|http://example.com/a
+http://example.com/a/b/../../c|http://example.com/c
+http://example.com/a/../../b|http://example.com/b
+http://example.com/a/b/../c/./d|http://example.com/a/c/d
+http://example.com/./a|http://example.com/a
+http://example.com/a/..|http://example.com/
+http://example.com/a/../|http://example.com/
+http://example.com/..a/b|http://example.com/..a/b
+http://example.com/a../b|http://example.com/a../b
+# Empty paths and trailing slashes
+http://example.com|http://example.com/
+http://example.com/|http://example.com/
+http://example.com?x=1|http://example.com/?x=1
+http://example.com/a|http://example.com/a
+http://example.com/a/|http://example.com/a/
+http://example.com/a/b/|http://example.com/a/b/
+http://example.com/a//b|http://example.com/a//b
+http://example.com//|http://example.com//
+http://example.com/a?x=1|http://example.com/a?x=1
+http://example.com/a/?x=1|http://example.com/a/?x=1
+# Query sorting
+http://example.com/?b=2&a=1|http://example.com/?a=1&b=2
+http://example.com/?c=3&b=2&a=1|http://example.com/?a=1&b=2&c=3
+http://example.com/?a=2&a=1|http://example.com/?a=1&a=2
+http://example.com/?a=1&a=1|http://example.com/?a=1&a=1
+http://example.com/?B=1&a=2|http://example.com/?B=1&a=2
+http://example.com/?z&a=1|http://example.com/?a=1&z
+http://example.com/?a=|http://example.com/?a=
+http://example.com/?a|http://example.com/?a
+http://example.com/?|http://example.com/
+http://example.com/?&|http://example.com/
+http://example.com/?a=1&&b=2|http://example.com/?a=1&b=2
+http://example.com/?&a=1&|http://example.com/?a=1
+http://example.com/?x=a%20b&c=d|http://example.com/?c=d&x=a%20b
+http://example.com/?q=a=b&c=d|http://example.com/?c=d&q=a=b
+# Tracking and session query parameters
+http://example.com/a?utm_source=x|http://example.com/a
+http://example.com/a?utm_medium=x&utm_campaign=y|http://example.com/a
+http://example.com/a?id=1&utm_source=x|http://example.com/a?id=1
+http://example.com/a?UTM_SOURCE=x&id=1|http://example.com/a?id=1
+http://example.com/a?utm_custom=x|http://example.com/a
+http://example.com/a?utmost=x|http://example.com/a?utmost=x
+http://example.com/a?xutm_source=x|http://example.com/a?xutm_source=x
+http://example.com/a?jsessionid=abc|http://example.com/a
+http://example.com/a?JSESSIONID=abc&b=1|http://example.com/a?b=1
+http://example.com/a?PHPSESSID=abc|http://example.com/a
+http://example.com/a?sessionid=abc|http://example.com/a
+http://example.com/a?session_id=abc|http://example.com/a
+http://example.com/a?cfid=1&cftoken=2|http://example.com/a
+http://example.com/a?aspsessionid=abc|http://example.com/a
+http://example.com/a?sid=abc|http://example.com/a?sid=abc
+http://example.com/a?session=abc|http://example.com/a?session=abc
+# Session IDs in the path
+http://example.com/a;jsessionid=abc|http://example.com/a
+http://example.com/a;JSESSIONID=abc?b=1|http://example.com/a?b=1
+http://example.com/a;jsessionid=abc/b|http://example.com/a/b
+http://example.com/a;v=1|http://example.com/a;v=1
+http://example.com/a;jsessionid=abc;v=1|http://example.com/a;v=1
+http://example.com/a;v=1;jsessionid=abc|http://example.com/a;v=1
+# Internationalized domain names
+http://münchen.de/|http://xn--mnchen-3ya.de/
+http://MÜNCHEN.de/a|http://xn--mnchen-3ya.de/a
+http://bücher.example/|http://xn--bcher-kva.example/
+http://例え.テスト/|http://xn--r8jz45g.xn--zckzah/
+http://xn--mnchen-3ya.de/|http://xn--mnchen-3ya.de/
+http://faß.de/|http://fass.de/
+https://münchen.de:443/a|https://xn--mnchen-3ya.de/a
+http://пример.рф/|http://xn--e1afmkfd.xn--p1ai/
+# Credentials and IP addresses
+http://user:pass@example.com/a|http://example.com/a
+http://user@example.com/|http://example.com/
+http://user:p%40ss@example.com:80/|http://example.com/
+http://127.0.0.1/|http://127.0.0.1/
+http://127.0.0.1:8080/a|http://127.0.0.1:8080/a
+http://[::1]/a|http://[::1]/a
+http://[::1]:8080/a|http://[::1]:8080/a
+http://[2001:DB8::1]:80/|http://[2001:db8::1]/
+# Whitespace
+http://example.com/a b|http://example.com/a%20b
+"  http://example.com/a  "|http://example.com/a
+# Rejected
+mailto:a@example.com|
+javascript:void(0)|
+ftp://example.com/a|
+tel:+15551234567|
+/relative/path|
+relative|
+//example.com/a|
+http://|
+http:///a|
+http://exa mple.com/|
+http://example.com/a<b|
+http://example.com/%zz|
+http://a..b/|
+http://example.com:80:80/|
