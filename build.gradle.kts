@@ -17,6 +17,8 @@ subprojects {
 
     extensions.configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         java {
+            // Only code we write; generated sources live under build/.
+            target("src/*/java/**/*.java")
             googleJavaFormat(catalog.versions.google.java.format.get())
             removeUnusedImports()
         }
