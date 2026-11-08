@@ -24,7 +24,8 @@ import lombok.experimental.UtilityClass;
 public class UrlNormalizer {
   /** Session parameters removed by default. Names must be lowercase. */
   public final Set<String> DEFAULT_STRIPPED_PARAMS =
-      Set.of("jsessionid", "phpsessid", "sessionid", "session_id", "aspsessionid", "cfid", "cftoken");
+      Set.of(
+          "jsessionid", "phpsessid", "sessionid", "session_id", "aspsessionid", "cfid", "cftoken");
 
   private final String TRACKING_PREFIX = "utm_";
   private final Pattern PORT = Pattern.compile("[0-9]{1,5}");
@@ -53,13 +54,12 @@ public class UrlNormalizer {
     }
 
     return normalizeAuthority(scheme, uri.getRawAuthority())
-        .map(
-            authority ->
-                scheme
-                    + "://"
-                    + authority
-                    + normalizePath(uri.getRawPath(), strippedParams)
-                    + normalizeQuery(uri.getRawQuery(), strippedParams));
+        .map(authority ->
+            scheme
+                + "://"
+                + authority
+                + normalizePath(uri.getRawPath(), strippedParams)
+                + normalizeQuery(uri.getRawQuery(), strippedParams));
   }
 
   private Optional<String> normalizeAuthority(String scheme, String rawAuthority) {
