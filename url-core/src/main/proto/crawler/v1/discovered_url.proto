@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package crawler.v1;
+
+option java_multiple_files = true;
+option java_package = "dev.crawler.urlcore.proto";
+
+// A link waiting to be added to the frontier. It is the value of an
+// `incoming` message, and the Kafka key is the URL's registered domain.
+//
+// Field numbers identify fields on the wire: never change or reuse one.
+message DiscoveredUrl {
+  // The normalized URL.
+  string url = 1;
+
+  // The normalized URL of the page containing the link. Empty for seeds.
+  string source = 2;
+
+  // Number of links followed from a seed. Seeds have depth 0.
+  uint32 depth = 3;
+
+  // When the link was found, in milliseconds since the Unix epoch.
+  int64 discovered_at_ms = 4;
+}
