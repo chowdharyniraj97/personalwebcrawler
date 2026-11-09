@@ -48,34 +48,35 @@ public class UrlNormalizer {
       return Optional.empty();
     }
 
-    String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+    var scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
     if (!(scheme.equals("http") || scheme.equals("https")) || uri.getRawAuthority() == null) {
       return Optional.empty();
     }
 
     return normalizeAuthority(scheme, uri.getRawAuthority())
         .map(authority ->
-            scheme
-                + "://"
-                + authority
-                + normalizePath(uri.getRawPath(), strippedParams)
-                + normalizeQuery(uri.getRawQuery(), strippedParams));
+            "%s://%s%s%s"
+                .formatted(
+                    scheme,
+                    authority,
+                    normalizePath(uri.getRawPath(), strippedParams),
+                    normalizeQuery(uri.getRawQuery(), strippedParams)));
   }
 
   private Optional<String> normalizeAuthority(String scheme, String rawAuthority) {
     // Credentials never belong in the frontier.
-    String hostAndPort = rawAuthority.substring(rawAuthority.lastIndexOf('@') + 1);
+    var hostAndPort = rawAuthority.substring(rawAuthority.lastIndexOf('@') + 1);
 
     // The colons inside an IPv6 literal such as [::1] are not port separators.
-    int separator = hostAndPort.lastIndexOf(':');
-    boolean hasPort = separator >= 0 && separator > hostAndPort.lastIndexOf(']');
-    String host = hasPort ? hostAndPort.substring(0, separator) : hostAndPort;
-    String portText = hasPort ? hostAndPort.substring(separator + 1) : "";
+    var separator = hostAndPort.lastIndexOf(':');
+    var hasPort = separator >= 0 && separator > hostAndPort.lastIndexOf(']');
+    var host = hasPort ? hostAndPort.substring(0, separator) : hostAndPort;
+    var portText = hasPort ? hostAndPort.substring(separator + 1) : "";
 
     if (!portText.isEmpty() && !PORT.matcher(portText).matches()) {
       return Optional.empty();
     }
-    int port = portText.isEmpty() ? -1 : Integer.parseInt(portText);
+    var port = portText.isEmpty() ? -1 : Integer.parseInt(portText);
     if (!portText.isEmpty() && (port == 0 || port > MAX_PORT)) {
       return Optional.empty();
     }
@@ -84,7 +85,7 @@ public class UrlNormalizer {
   }
 
   private Optional<String> normalizeHost(String rawHost) {
-    String host = rawHost.toLowerCase(Locale.ROOT);
+    var host = rawHost.toLowerCase(Locale.ROOT);
     if (host.startsWith("[")) {
       return Optional.of(host);
     }
@@ -113,20 +114,24 @@ public class UrlNormalizer {
       return "/";
     }
 
-    String[] segments = rawPath.split("/", -1);
+    var segments = rawPath.split("/", -1);
     Deque<String> output = new ArrayDeque<>();
-    for (int i = 1; i < segments.length; i++) {
-      String segment = stripPathParams(segments[i], strippedParams);
-      boolean last = i == segments.length - 1;
-      if (segment.equals("..")) {
-        output.pollLast();
-      }
-      if (segment.equals(".") || segment.equals("..")) {
-        if (last) {
-          output.addLast("");
+    for (var i = 1; i < segments.length; i++) {
+      var segment = stripPathParams(segments[i], strippedParams);
+      var last = i == segments.length - 1;
+      switch (segment) {
+        case "." -> {
+          if (last) {
+            output.addLast("");
+          }
         }
-      } else {
-        output.addLast(segment);
+        case ".." -> {
+          output.pollLast();
+          if (last) {
+            output.addLast("");
+          }
+        }
+        default -> output.addLast(segment);
       }
     }
     return "/" + String.join("/", output);
@@ -136,7 +141,7 @@ public class UrlNormalizer {
     if (segment.indexOf(';') < 0) {
       return segment;
     }
-    String[] parts = segment.split(";", -1);
+    var parts = segment.split(";", -1);
     return Stream.concat(
             Stream.of(parts[0]),
             Arrays.stream(parts).skip(1).filter(part -> !isStripped(part, strippedParams)))
@@ -156,8 +161,8 @@ public class UrlNormalizer {
   }
 
   private boolean isStripped(String param, Set<String> strippedParams) {
-    int equals = param.indexOf('=');
-    String name = (equals < 0 ? param : param.substring(0, equals)).toLowerCase(Locale.ROOT);
+    var equals = param.indexOf('=');
+    var name = (equals < 0 ? param : param.substring(0, equals)).toLowerCase(Locale.ROOT);
     return name.startsWith(TRACKING_PREFIX) || strippedParams.contains(name);
   }
 }
