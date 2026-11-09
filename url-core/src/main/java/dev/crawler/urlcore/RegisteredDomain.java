@@ -18,12 +18,12 @@ public class RegisteredDomain {
 
   /** Returns the registered domain of a URL produced by {@link UrlNormalizer}. */
   public String ofUrl(String normalizedUrl) {
-    int start = normalizedUrl.indexOf("://") + 3;
-    String authority = normalizedUrl.substring(start, normalizedUrl.indexOf('/', start));
+    var start = normalizedUrl.indexOf("://") + 3;
+    var authority = normalizedUrl.substring(start, normalizedUrl.indexOf('/', start));
 
     // The colons inside an IPv6 literal such as [::1] are not port separators.
-    int separator = authority.lastIndexOf(':');
-    boolean hasPort = separator > authority.lastIndexOf(']');
+    var separator = authority.lastIndexOf(':');
+    var hasPort = separator > authority.lastIndexOf(']');
     return of(hasPort ? authority.substring(0, separator) : authority);
   }
 
@@ -31,8 +31,8 @@ public class RegisteredDomain {
     if (host.startsWith("[") || IPV4.matcher(host).matches()) {
       return host;
     }
-    boolean strict = false;
-    boolean excludePrivateSuffixes = true;
+    var strict = false;
+    var excludePrivateSuffixes = true;
     String domain = EffectiveTldFinder.getAssignedDomain(host, strict, excludePrivateSuffixes);
     return domain == null ? host : domain;
   }
