@@ -63,7 +63,7 @@ Environment: Colima, Docker and Compose are installed. Colima was last left runn
 
 ## Next steps
 
-1. Clean up non-test code to match `.claude/CLAUDE.md`. The user approved this.
+1. A pull request is open from `project-rules-and-checkpoint`. It adds the project rules and this file, and applies the `.claude/CLAUDE.md` style to `UrlNormalizer` and `RegisteredDomain`. `./gradlew check` passes locally. Merge it only when the user asks.
 2. CRW-3 topics, then CRW-7 seed loader.
 
 ## AWS, for later
