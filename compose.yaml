@@ -29,6 +29,21 @@ services:
       timeout: 3s
       retries: 30
 
+  # Runs once: creates the topics on the broker, then exits.
+  kafka-init:
+    image: apache/kafka:4.4.0
+    networks: [crawler]
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: "no"
+    volumes: ["./infra/kafka/create-topics.sh:/create-topics.sh:ro"]
+    entrypoint: ["/bin/sh", "/create-topics.sh"]
+    environment:
+      BOOTSTRAP: kafka:9092
+      PARTITIONS: ${CRAWLER_TOPIC_PARTITIONS:-64}
+      REPLICATION: ${CRAWLER_TOPIC_REPLICATION_FACTOR:-1}
+      RETENTION: ${CRAWLER_INCOMING_RETENTION_BYTES:-104857600}
+
   unbound:
     build: infra/unbound
     networks:

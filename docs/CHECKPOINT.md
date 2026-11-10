@@ -34,6 +34,7 @@ Learn concurrency, parallelism and production operations by building a domain-pa
 | Plain consumer with our own changelog, not Kafka Streams | Streams would hide what the project is meant to teach |
 | One instance of everything first, then scale | Saves memory; a node joins a consumer group from day one, so scaling needs no new code |
 | 64 partitions | Partition count is the one setting that is hard to change later |
+| Topics created by `infra/kafka/create-topics.sh` in a one-shot Compose service, `kafka-init` | Kafka has no config file that declares topics, and its own CLI needs no Java from us |
 | Protobuf `DiscoveredUrl`, zstd on the producer | Four fields, safe schema evolution; batch compression is what makes URLs small |
 | Key is the registered domain, ICANN suffixes only | One node owns a whole company's traffic for politeness; `*.github.io` is one domain |
 | Normalizer keeps URLs distinct when unsure | A duplicate fetch is acceptable, a lost URL is not |
@@ -42,7 +43,7 @@ Learn concurrency, parallelism and production operations by building a domain-pa
 
 ## Ticket status
 
-Done: CRW-2, CRW-4, CRW-6. In progress: CRW-1, CRW-5. Everything else has not started.
+Done: CRW-2, CRW-4, CRW-6. In progress: CRW-1, CRW-3, CRW-5. Everything else has not started.
 
 - **CRW-1:** still needs the `frontier` and `fetcher` modules and pins for RocksDB and Caffeine.
 - **CRW-5:** still needs proof that Kafka partitions by the domain key. Verify in CRW-7.
@@ -53,7 +54,7 @@ Planned order. Sprint 1: 2, 3, 7. Sprint 2: 8, 9, 12, 10, 11, 13, plus 27 (metri
 
 ## Current state
 
-`main` is at `b2be813`. It contains `url-core`: `UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema, and their tests.
+`main` is at `5f76827`. It contains `url-core`: `UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema, and their tests.
 
 CRW-2 is complete and merged to `main` through PR #2. It added `compose.yaml`, `node/`, `synthetic-web/`, `infra/unbound/`, `.dockerignore` and `README.md`. The Notion ticket is marked Done.
 
@@ -63,8 +64,8 @@ Environment: Colima, Docker and Compose are installed. Colima was last left runn
 
 ## Next steps
 
-1. A pull request is open from `project-rules-and-checkpoint`. It adds the project rules and this file, and applies the `.claude/CLAUDE.md` style to `UrlNormalizer` and `RegisteredDomain`. `./gradlew check` passes locally. Merge it only when the user asks.
-2. CRW-3 topics, then CRW-7 seed loader.
+1. Finish CRW-3. The work is committed locally on the branch `kafka-topics` and has not been pushed: `infra/kafka/create-topics.sh`, the `kafka-init` service in `compose.yaml`, and `README.md`. Verified on a real broker: both topics have 64 partitions, replication factor 1 and the intended configs; they survive a Colima restart; re-running `kafka-init` exits 0 and leaves them unchanged; a replication factor of 3 exits 1 and creates nothing; and `./gradlew :node:run` connects. Remaining: push, open a PR, and mark the ticket Done, each when asked.
+2. CRW-7 seed loader.
 
 ## AWS, for later
 
@@ -82,3 +83,5 @@ Free Plan with $100 credits, up to $200 with activities. It ends 6 months after 
 - The bundled Public Suffix List is from December 2025, and nothing calls `RegisteredDomain.reload` yet.
 - The synthetic web lacks HTTPS, redirects, compression, `ETag`/304, large or slow bodies and dropped connections. Add each with the ticket that needs it, such as `ETag` in CRW-19.
 - Retention limits are needed on `incoming` locally because disk is small, and they can drop unread URLs.
+- `kafka-topics.sh --if-not-exists` leaves an existing topic unchanged even if its settings differ from the script. A node should fail fast on a wrong partition count when it starts consuming in CRW-8.
+- `min.insync.replicas` is 1, the broker default. Set it when moving to 3 brokers.

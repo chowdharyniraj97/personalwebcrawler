@@ -25,6 +25,7 @@ docker compose up -d --build
 | Service | Purpose | From your machine |
 | --- | --- | --- |
 | `kafka` | Single KRaft broker | `localhost:19092` |
+| `kafka-init` | Creates the Kafka topics, then exits | Not reachable |
 | `unbound` | Caching DNS that resolves every `*.test` domain to the synthetic web | `localhost:15353` (TCP) |
 | `synthetic-web` | Fake internet to crawl | `localhost:8080` |
 
@@ -35,6 +36,22 @@ dig +tcp @127.0.0.1 -p 15353 site77.test +short
 ```
 
 Stop it with `docker compose down`. Add `-v` to delete the Kafka data as well.
+
+### Kafka topics
+
+`kafka-init` runs [infra/kafka/create-topics.sh](infra/kafka/create-topics.sh) on every `docker compose up`. It creates `incoming` and the compacted `frontier-changelog`. A topic that already exists is left unchanged, so to apply new settings locally, delete the data with `docker compose down -v`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CRAWLER_TOPIC_PARTITIONS` | `64` | Partitions per topic |
+| `CRAWLER_TOPIC_REPLICATION_FACTOR` | `1` | Copies of each partition. Cannot exceed the number of brokers |
+| `CRAWLER_INCOMING_RETENTION_BYTES` | `104857600` | Size limit per partition of `incoming`, or `-1` for no limit |
+
+To inspect a topic:
+
+```sh
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic incoming
+```
 
 ## Run a node against the stack
 
