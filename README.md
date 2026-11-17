@@ -61,6 +61,15 @@ docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server loca
 
 The node is a placeholder for now: it connects to Kafka and logs the broker count. Set `CRAWLER_BOOTSTRAP_SERVERS` to point it at a different cluster.
 
+## Load seed URLs
+
+`seed-loader` reads a file with one URL per line, normalizes each URL and publishes it to `incoming`, keyed by registered domain. It skips and counts invalid lines, and exits with a non-zero status if any URL could not be delivered.
+
+```sh
+seq 0 999 | sed 's|.*|http://site&.test/|' > /tmp/seeds.txt
+./gradlew :seed-loader:run --args=/tmp/seeds.txt
+```
+
 ## Synthetic web
 
 `synthetic-web` generates every page from a seed, so it can serve millions of URLs without storing them. The defaults are 1,000 domains with 10,000 pages each, or 10M URLs. Domains are named `site0.test`, `site1.test` and so on.

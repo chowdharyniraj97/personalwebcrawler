@@ -38,15 +38,21 @@ Learn concurrency, parallelism and production operations by building a domain-pa
 | Protobuf `DiscoveredUrl`, zstd on the producer | Four fields, safe schema evolution; batch compression is what makes URLs small |
 | Key is the registered domain, ICANN suffixes only | One node owns a whole company's traffic for politeness; `*.github.io` is one domain |
 | Normalizer keeps URLs distinct when unsure | A duplicate fetch is acceptable, a lost URL is not |
+| One RocksDB database per partition, with column families `records`, `urls` and later `due` | Moving a partition is closing and deleting one folder. Column families allow atomic batches across a record and its index entry |
+| Store the URL text in the `urls` column family | The design's record holds only the fingerprint, which cannot be turned back into a URL |
+| 40-byte fixed record plus the raw ETag (up to 255 bytes, longer ones skipped) | `If-None-Match` needs the exact ETag, so it cannot be stored as a hash |
+| All partition stores share one 256 MB block cache and one 128 MB write-buffer limit | 64 databases with default settings would use several GB |
+| Changelog records go to the same partition number as their input record (CRW-10) | The default partitioner would scatter one partition's state across all changelog partitions |
+| Wait for the changelog write to be confirmed before writing RocksDB (CRW-10) | Otherwise a crash between the two leaves a URL only on local disk, and a replay skips the changelog |
 | Virtual threads for fetching, fixed pool for parsing, platform threads for RocksDB | JNI calls pin virtual threads |
 | Dev free on the Mac; short AWS runs later, Hetzner as fallback | AWS credits are a one-time pot |
 
 ## Ticket status
 
-Done: CRW-2, CRW-4, CRW-6. In progress: CRW-1, CRW-3, CRW-5. Everything else has not started.
+Done: CRW-2, CRW-3, CRW-4, CRW-6. In progress: CRW-1, CRW-5, CRW-7. Everything else has not started.
 
 - **CRW-1:** still needs the `frontier` and `fetcher` modules and pins for RocksDB and Caffeine.
-- **CRW-5:** still needs proof that Kafka partitions by the domain key. Verify in CRW-7.
+- **CRW-5:** partitioning by domain key is proven: 1,000 URLs across 100 domains were loaded and read back, and each domain stayed on one partition. The ticket is not marked Done in Notion.
 
 Planned order. Sprint 1: 2, 3, 7. Sprint 2: 8, 9, 12, 10, 11, 13, plus 27 (metrics). Sprint 3: 15, 14, 16, 17, 18, 19, 20. Sprint 4: 21, 22, 24, 23, 25, 26. Sprint 5: 29, scale-up to 3 brokers and 10 nodes, 28, 31, 30, 32.
 
@@ -54,7 +60,7 @@ Planned order. Sprint 1: 2, 3, 7. Sprint 2: 8, 9, 12, 10, 11, 13, plus 27 (metri
 
 ## Current state
 
-`main` is at `5f76827`. It contains `url-core`: `UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema, and their tests.
+`main` is at `94d59ba`. It contains `url-core`: `UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema, and their tests.
 
 CRW-2 is complete and merged to `main` through PR #2. It added `compose.yaml`, `node/`, `synthetic-web/`, `infra/unbound/`, `.dockerignore` and `README.md`. The Notion ticket is marked Done.
 
@@ -64,8 +70,8 @@ Environment: Colima, Docker and Compose are installed. Colima was last left runn
 
 ## Next steps
 
-1. Finish CRW-3. The work is committed locally on the branch `kafka-topics` and has not been pushed: `infra/kafka/create-topics.sh`, the `kafka-init` service in `compose.yaml`, and `README.md`. Verified on a real broker: both topics have 64 partitions, replication factor 1 and the intended configs; they survive a Colima restart; re-running `kafka-init` exits 0 and leaves them unchanged; a replication factor of 3 exits 1 and creates nothing; and `./gradlew :node:run` connects. Remaining: push, open a PR, and mark the ticket Done, each when asked.
-2. CRW-7 seed loader.
+1. CRW-3 is merged to `main` directly, without a PR, at the user's request, after CI passed on the branch. The Notion ticket is marked Done. It added `infra/kafka/create-topics.sh`, the `kafka-init` service in `compose.yaml`, and `README.md`. Verified on a real broker: both topics have 64 partitions, replication factor 1 and the intended configs; they survive a Colima restart; re-running `kafka-init` exits 0 and leaves them unchanged; a replication factor of 3 exits 1 and creates nothing; and `./gradlew :node:run` connects.2. CRW-7 seed loader is written and uncommitted on the branch `seed-loader`, along with this file: the `seed-loader` module, `settings.gradle.kts` and `README.md`. `./gradlew check` passes with 175 tests. On a real broker it sent 1,000 URLs and counted 2 invalid lines, and with no broker it exited non-zero. The user reviews it next. The local `incoming` topic holds those 1,000 test URLs until `docker compose down -v`.
+3. CRW-8 in three chunks, each reviewed before the next: (a) `frontier` module, RocksDB version pin, `FrontierRecord` and its byte codec; (b) `PartitionStore` with `records` and `urls` column families, `putIfAbsent` under a per-partition lock, tested against real RocksDB; (c) `FrontierStores`, which opens, closes and deletes stores as partitions move, with the shared memory budget. Then CRW-9, 12, 10, 11, 13 and 27.
 
 ## AWS, for later
 
@@ -84,4 +90,5 @@ Free Plan with $100 credits, up to $200 with activities. It ends 6 months after 
 - The synthetic web lacks HTTPS, redirects, compression, `ETag`/304, large or slow bodies and dropped connections. Add each with the ticket that needs it, such as `ETag` in CRW-19.
 - Retention limits are needed on `incoming` locally because disk is small, and they can drop unread URLs.
 - `kafka-topics.sh --if-not-exists` leaves an existing topic unchanged even if its settings differ from the script. A node should fail fast on a wrong partition count when it starts consuming in CRW-8.
+- With no reachable broker, the seed loader waits up to 60 seconds per URL (`max.block.ms`) before counting a failure. On a large file, stop it by hand.
 - `min.insync.replicas` is 1, the broker default. Set it when moving to 3 brokers.
