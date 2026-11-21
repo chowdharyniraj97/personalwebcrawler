@@ -16,7 +16,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 @Slf4j
 @RequiredArgsConstructor
 public class SeedLoader {
-  private static final String SOURCE = "seed";
   private static final int SEED_DEPTH = 0;
 
   private final Producer<String, byte[]> producer;
@@ -58,7 +57,6 @@ public class SeedLoader {
     var message =
         DiscoveredUrl.newBuilder()
             .setUrl(url)
-            .setSource(SOURCE)
             .setDepth(SEED_DEPTH)
             .setDiscoveredAtMs(clock.millis())
             .build();
