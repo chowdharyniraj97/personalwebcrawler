@@ -38,10 +38,11 @@ Learn concurrency, parallelism and production operations by building a domain-pa
 | Protobuf `DiscoveredUrl`, zstd on the producer | Four fields, safe schema evolution; batch compression is what makes URLs small |
 | Key is the registered domain, ICANN suffixes only | One node owns a whole company's traffic for politeness; `*.github.io` is one domain |
 | Normalizer keeps URLs distinct when unsure | A duplicate fetch is acceptable, a lost URL is not |
-| One RocksDB database per partition, with column families `records`, `urls` and later `due` | Moving a partition is closing and deleting one folder. Column families allow atomic batches across a record and its index entry |
-| Store the URL text in the `urls` column family | The design's record holds only the fingerprint, which cannot be turned back into a URL |
-| 40-byte fixed record plus the raw ETag (up to 255 bytes, longer ones skipped) | `If-None-Match` needs the exact ETag, so it cannot be stored as a hash |
+| One RocksDB database per partition, with column families `records` and later `due` (CRW-9) | Moving a partition is closing and deleting one folder. Column families allow atomic batches across a record and its index entry |
+| The URL is a field of `FrontierRecord`, not a separate map | The design's fingerprint cannot be turned back into a URL. The compacted changelog keeps only the latest message per key, so each message must be complete anyway. One map means one lookup, no cross-map batch, and identical RocksDB and changelog values. The cost is larger RocksDB rewrites, fine at 10M URLs |
+| `FrontierRecord` is a Protobuf message, with the raw ETag as a string | RocksDB only stores bytes. Protobuf was already in the project, needs no hand-written codec, writes nothing for empty fields, and allows adding fields later. `If-None-Match` needs the exact ETag, so it cannot be a hash |
 | All partition stores share one 256 MB block cache and one 128 MB write-buffer limit | 64 databases with default settings would use several GB |
+| No leases: an in-memory in-flight set per partition instead (`ConcurrentHashMap.newKeySet()`), claimed when the scheduler queues a URL and released when its fetch finishes or it is dropped from a queue | Partition ownership already means one node per URL, so "being fetched" can live in memory. A crash loses the set, and the records still say SCHEDULED and due, so the next scan retries them. Removes the lease fields, the LEASED state, the expiry sweeper and per-key locking, and cuts writes per crawl from 3 to 1. Replaces CRW-12 as written in Notion |
 | Changelog records go to the same partition number as their input record (CRW-10) | The default partitioner would scatter one partition's state across all changelog partitions |
 | Wait for the changelog write to be confirmed before writing RocksDB (CRW-10) | Otherwise a crash between the two leaves a URL only on local disk, and a replay skips the changelog |
 | Virtual threads for fetching, fixed pool for parsing, platform threads for RocksDB | JNI calls pin virtual threads |
@@ -49,10 +50,10 @@ Learn concurrency, parallelism and production operations by building a domain-pa
 
 ## Ticket status
 
-Done: CRW-2, CRW-3, CRW-4, CRW-6. In progress: CRW-1, CRW-5, CRW-7. Everything else has not started.
+Done: CRW-2 to CRW-7. In progress: CRW-1, CRW-8. Everything else has not started.
 
 - **CRW-1:** still needs the `frontier` and `fetcher` modules and pins for RocksDB and Caffeine.
-- **CRW-5:** partitioning by domain key is proven: 1,000 URLs across 100 domains were loaded and read back, and each domain stayed on one partition. The ticket is not marked Done in Notion.
+- **CRW-5:** partitioning by domain key is proven: 1,000 URLs across 100 domains were loaded and read back, and each domain stayed on one partition. The ticket is marked Done.
 
 Planned order. Sprint 1: 2, 3, 7. Sprint 2: 8, 9, 12, 10, 11, 13, plus 27 (metrics). Sprint 3: 15, 14, 16, 17, 18, 19, 20. Sprint 4: 21, 22, 24, 23, 25, 26. Sprint 5: 29, scale-up to 3 brokers and 10 nodes, 28, 31, 30, 32.
 
@@ -60,7 +61,7 @@ Planned order. Sprint 1: 2, 3, 7. Sprint 2: 8, 9, 12, 10, 11, 13, plus 27 (metri
 
 ## Current state
 
-`main` is at `94d59ba`. It contains `url-core`: `UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema, and their tests.
+`main` is at `cb1f4e1`. It contains `url-core` (`UrlNormalizer`, `RegisteredDomain`, `Fingerprint`, the `DiscoveredUrl` Protobuf schema), the local stack in `compose.yaml` with `kafka-init` creating topics, `synthetic-web`, a placeholder `node`, and `seed-loader`.
 
 CRW-2 is complete and merged to `main` through PR #2. It added `compose.yaml`, `node/`, `synthetic-web/`, `infra/unbound/`, `.dockerignore` and `README.md`. The Notion ticket is marked Done.
 
@@ -70,8 +71,12 @@ Environment: Colima, Docker and Compose are installed. Colima was last left runn
 
 ## Next steps
 
-1. CRW-3 is merged to `main` directly, without a PR, at the user's request, after CI passed on the branch. The Notion ticket is marked Done. It added `infra/kafka/create-topics.sh`, the `kafka-init` service in `compose.yaml`, and `README.md`. Verified on a real broker: both topics have 64 partitions, replication factor 1 and the intended configs; they survive a Colima restart; re-running `kafka-init` exits 0 and leaves them unchanged; a replication factor of 3 exits 1 and creates nothing; and `./gradlew :node:run` connects.2. CRW-7 seed loader is written and uncommitted on the branch `seed-loader`, along with this file: the `seed-loader` module, `settings.gradle.kts` and `README.md`. `./gradlew check` passes with 175 tests. On a real broker it sent 1,000 URLs and counted 2 invalid lines, and with no broker it exited non-zero. The user reviews it next. The local `incoming` topic holds those 1,000 test URLs until `docker compose down -v`.
-3. CRW-8 in three chunks, each reviewed before the next: (a) `frontier` module, RocksDB version pin, `FrontierRecord` and its byte codec; (b) `PartitionStore` with `records` and `urls` column families, `putIfAbsent` under a per-partition lock, tested against real RocksDB; (c) `FrontierStores`, which opens, closes and deletes stores as partitions move, with the shared memory budget. Then CRW-9, 12, 10, 11, 13 and 27.
+1. CRW-8 chunks (a) and (b) are committed locally on the branch `frontier-store`, not pushed. Chunk (a): the `frontier` module with the Protobuf `FrontierRecord` message (`frontier/src/main/proto/crawler/v1/frontier_record.proto`), `FrontierRecords.scheduled`, tests, and the RocksDB 11.8.1 pin in the version catalog. The same branch also fixes the seed loader to leave `DiscoveredUrl.source` empty, as the schema says for seeds.
+2. CRW-8 chunk (b): `FrontierRecord` lost its lease fields and LEASED state and was renumbered 1 to 7 with no gaps, since no data existed yet. `PartitionStore` uses plain RocksDB (no `TransactionDB`, no Bloom filter, which the user declined for now) with `records` and `due` column families. The API is batch-first and has no lock: `findAbsent(fingerprints)` with one `multiGet`, then `insertAll(records)` writing records and due entries in one `WriteBatch`, so CRW-10 can confirm the changelog in between. Also `get` and `close`. One ingest thread per partition is the documented rule. `./gradlew check` passes with 207 tests. Next is chunk (c), whose design was proposed to the user and not yet approved.
+3. CRW-8 chunk (c): `FrontierStores`, which opens, closes and deletes stores as partitions move, with the shared memory budget.
+4. Then CRW-9 (due index), CRW-10 (ingest consumer), CRW-11 (restore), CRW-13 (scheduler, host queues and the in-flight set, absorbing CRW-12) and CRW-27 (metrics).
+
+CRW-3 and CRW-7 were merged to `main` directly, without a PR, at the user's request, each after CI passed on its branch. The local `incoming` topic holds 1,000 test URLs from verifying CRW-7 until `docker compose down -v`.
 
 ## AWS, for later
 

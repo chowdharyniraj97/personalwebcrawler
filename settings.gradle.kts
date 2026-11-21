@@ -5,4 +5,4 @@ plugins {
 
 rootProject.name = "personalwebcrawler"
 
-include("url-core", "node", "synthetic-web", "seed-loader")
+include("url-core", "node", "synthetic-web", "seed-loader", "frontier")

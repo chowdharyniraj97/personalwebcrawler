@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package crawler.v1;
+
+option java_multiple_files = true;
+option java_package = "dev.crawler.frontier.proto";
+
+// What the owner node knows about one URL. Stored in RocksDB under the URL's
+// fingerprint and rewritten after every fetch. The same bytes are the value of
+// the URL's changelog message, so a restore copies them back unchanged.
+//
+// Times are milliseconds since the Unix epoch, and 0 means "never" or "none".
+// Fields left at 0 or empty are not written at all, so a new record is a few
+// bytes. Field numbers identify fields on the wire: once records are stored,
+// never change or reuse one.
+message FrontierRecord {
+  // Where the URL is in its crawl cycle. Whether it is being fetched right now
+  // is not stored: the owner node tracks that in memory.
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_DISCOVERED = 1;
+    STATE_SCHEDULED = 2;
+    STATE_FETCHED = 3;
+  }
+
+  State state = 1;
+
+  // When the URL should be fetched next.
+  int64 next_due_ms = 2;
+
+  // Time of the last successful fetch, or 0.
+  int64 last_crawl_ms = 3;
+
+  // Hash of the last fetched body, to detect changes. fixed64 because a hash
+  // uses all 64 bits, which would take 10 bytes as a varint.
+  fixed64 content_hash = 4;
+
+  // Fetch failures in a row, for backoff.
+  uint32 fail_count = 5;
+
+  // The server's last ETag, sent back in If-None-Match. Must be the exact
+  // text, so it cannot be stored as a hash.
+  string etag = 6;
+
+  // The normalized URL. Kept in the record, not in a separate map, so a record
+  // is always complete: the changelog keeps only the latest message per key,
+  // and that message must be enough to restore the URL.
+  string url = 7;
+}
