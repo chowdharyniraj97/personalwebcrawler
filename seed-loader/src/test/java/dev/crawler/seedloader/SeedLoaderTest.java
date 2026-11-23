@@ -68,7 +68,7 @@ class SeedLoaderTest {
 
     var message = DiscoveredUrl.parseFrom(record.value());
     assertEquals("http://www.example.com/b", message.getUrl());
-    assertEquals("seed", message.getSource());
+    assertEquals("", message.getSource(), "seeds have no source page");
     assertEquals(0, message.getDepth());
     assertEquals(1_000, message.getDiscoveredAtMs());
   }
