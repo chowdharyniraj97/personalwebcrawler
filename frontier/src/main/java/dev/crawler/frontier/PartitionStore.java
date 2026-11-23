@@ -16,6 +16,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -23,6 +25,7 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBufferManager;
 import org.rocksdb.WriteOptions;
 
 /**
@@ -76,13 +79,33 @@ public final class PartitionStore implements AutoCloseable {
   }
 
   /**
-   * Opens the store in {@code directory}, creating it if needed. The parent directory must exist.
+   * Opens the store in {@code directory}, creating it if needed, with RocksDB's default memory
+   * settings: its own block cache and memtables. The parent directory must exist.
    *
    * @throws RocksDBException if the store cannot be opened, for example because it is already open
    */
   public static PartitionStore open(Path directory) throws RocksDBException {
-    var dbOptions = new DBOptions().setCreateIfMissing(true).setCreateMissingColumnFamilies(true);
-    var familyOptions = new ColumnFamilyOptions();
+    return open(directory, new DBOptions(), new ColumnFamilyOptions());
+  }
+
+  /**
+   * Opens the store like {@link #open(Path)}, but using memory shared with other stores: reads are
+   * cached in {@code cache}, and {@code writeBufferManager} caps the memtables of every store that
+   * shares it. Both must stay open until every store using them is closed.
+   */
+  static PartitionStore open(Path directory, Cache cache, WriteBufferManager writeBufferManager)
+      throws RocksDBException {
+    return open(
+        directory,
+        new DBOptions().setWriteBufferManager(writeBufferManager),
+        new ColumnFamilyOptions()
+            .setTableFormatConfig(new BlockBasedTableConfig().setBlockCache(cache)));
+  }
+
+  private static PartitionStore open(
+      Path directory, DBOptions dbOptions, ColumnFamilyOptions familyOptions)
+      throws RocksDBException {
+    dbOptions.setCreateIfMissing(true).setCreateMissingColumnFamilies(true);
     // Every RocksDB database has a "default" family, which must be listed even though it is unused.
     var families =
         List.of(
